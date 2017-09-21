@@ -1,0 +1,16 @@
+#input{
+	position:absolute;
+	width:100%;
+	bottom:0;
+	left:0;
+}
+
+#main {
+/*	overflow:scroll;*/
+	height: calc(100% - 20px);
+	overflow-y:scroll;
+}
+
+.heard {
+	float:right;
+}
