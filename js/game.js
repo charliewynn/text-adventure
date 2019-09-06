@@ -66,33 +66,30 @@ $(function() {
     var goList = ["go to", "goto", "enter", "go"];
     var getList = ["get", "pick up", "take"];
     var buyList = ["buy", "purchase"];
-    var todo = [lookList, goList, buyList, getList];
+    var todo = [];
 
     var currentLoc = Game.currentLocation();
     for (var action in currentLoc.Actions) {
       action = currentLoc.Actions[action];
       todo.push(action.Nicknames);
     }
+    todo.push(lookList, goList, buyList, getList);
 
     var parsedAction = resolveAction(text, todo);
 
     if (!parsedAction) return Game.say("You can't " + text);
-    switch (parsedAction.action) {
-      case lookList[0]:
-        return Game.say(Game.currentLocation().LongText);
-        break;
-      case goList[0]:
-        return Game.tryMove(parsedAction.stripped);
-        break;
-      case buyList[0]:
-        return Game.tryBuy(parsedAction.stripped);
-        break;
-      case getList[0]:
-        return Game.tryGet(parsedAction.stripped);
-        break;
+    if (Game.tryAction(parsedAction) === "NO_ACTION_FOUND") {
+      switch (parsedAction.action) {
+        case lookList[0]:
+          return Game.say(Game.currentLocation().LongText);
+        case goList[0]:
+          return Game.tryMove(parsedAction.stripped);
+        case buyList[0]:
+          return Game.tryBuy(parsedAction.stripped);
+        case getList[0]:
+          return Game.tryGet(parsedAction.stripped);
+      }
     }
-    //we must be doing a location action if we get to this point
-    Game.tryAction(parsedAction);
   };
   function resolveAction(userText, commandLists) {
     for (var commandList in commandLists) {
@@ -121,11 +118,13 @@ $(function() {
   Game.tryAction = function(parsedAction) {
     //we might need to make this smarter as far as matching actions
     var currentLoc = Game.currentLocation();
+    if (!currentLoc.Actions) return "NO_ACTION_FOUND";
     var possibleActions = currentLoc.Actions.filter(function(act) {
       return act.Nicknames[0] == parsedAction.action;
     });
+    if (possibleActions.length == 0) return "NO_ACTION_FOUND";
     if (!possibleActions.length == 1)
-      return Game.die(
+      return Log.die(
         "Tried to perform " + possibleActions.length + " actions at once",
         possibleActions
       );
@@ -234,14 +233,36 @@ $(function() {
 
   Game.tryMove = function(strippedLocation) {
     var loc = Game.currentLocation();
-
+    var newLoc;
     if (strippedLocation.toLowerCase() == "back") {
-      strippedLocation = Game.state.lastLocation;
+      newLoc = Game.findLocation(Game.state.lastLocation);
+    } else {
+      newLoc = parseLocation(loc, strippedLocation);
     }
-    //possible locations
+    if (newLoc) {
+      if (newLoc.RequiresOn) {
+        for (var req in newLoc.RequiresOn) {
+          req = newLoc.RequiresOn[req];
+          if (!Game.state[req[0]]) return Game.say(req[1]);
+        }
+      }
+      if (newLoc.RequiresOff) {
+        for (var req in newLoc.RequiresOff) {
+          req = newLoc.RequiresOff[req];
+          if (Game.state[req[0]]) return Game.say(req[1]);
+        }
+      }
+      return Game.Move(newLoc.ShortName);
+    }
+
+    Game.say("Could not find location " + strippedLocation);
+    Game.say("You are currently at " + Game.currentLocation().Name);
+  };
+
+  parseLocation = function(loc, strippedLocation) {
     for (var pl in loc.Neighbors) {
       pl = loc.Neighbors[pl];
-      var locNicknames = pl; //.slice(1);
+      var locNicknames = pl.slice(1);
       pl = Game.findLocation(pl[0]);
       pl.Nicknames = locNicknames;
       //check each nickname
@@ -251,24 +272,10 @@ $(function() {
             .toLowerCase()
             .indexOf(pl.Nicknames[nn].toLowerCase()) >= 0
         ) {
-          if (pl.RequiresOn) {
-            for (var req in pl.RequiresOn) {
-              req = pl.RequiresOn[req];
-              if (!Game.state[req[0]]) return Game.say(req[1]);
-            }
-          }
-          if (pl.RequiresOff) {
-            for (var req in pl.RequiresOff) {
-              req = pl.RequiresOff[req];
-              if (Game.state[req[0]]) return Game.say(req[1]);
-            }
-          }
-          return Game.Move(pl.ShortName);
+          return pl;
         }
       }
     }
-    Game.say("Could not find location " + strippedLocation);
-    Game.say("You are currently at " + Game.currentLocation().Name);
   };
 
   Game.Move = function(location) {
@@ -322,7 +329,7 @@ $(function() {
       .last()
       .append(Game.consoleQueue[0][0]);
     Game.consoleQueue[0] = Game.consoleQueue[0].substr(1);
-    if (Game.consoleQueue[0].length == 0) {
+    if (Game.consoleQueue == undefined || Game.consoleQueue[0].length == 0) {
       Game.consoleQueue.splice(0, 1);
       if (Game.consoleQueue.length) {
         Game.console.append('<div class="sent"></div>');

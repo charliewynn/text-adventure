@@ -96,6 +96,12 @@ var game = {
       Neighbors: [
         ["Kokori", "kokori", "forest", "forrest", "home"],
         ["InsideDekuTree", "inside", "in"]
+      ],
+      Actions: [
+        {
+          Nicknames: ["Enter"],
+          MoveTo: "InsideDekuTree"
+        }
       ]
     },
     {
